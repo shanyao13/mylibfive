@@ -7,6 +7,8 @@ This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this file,
 You can obtain one at http://mozilla.org/MPL/2.0/.
 */
+#include <omp.h>
+#include <vector>
 #include <numeric>
 #include <fstream>
 #include <boost/algorithm/string/predicate.hpp>
@@ -168,12 +170,19 @@ bool Mesh::saveSTL(const std::string& filename,
             [](uint32_t i, const Mesh* m){ return i + m->branes.size(); });
     file.write(reinterpret_cast<char*>(&num), sizeof(num));
 
-    for (const auto& m : meshes)
+    std::vector<const Mesh*> meshes_vector(meshes.begin(), meshes.end());
+    //for (const auto& m : meshes)
+    //#pragma omp parallel for
+    //for (auto it = meshes.begin(); it != meshes.end(); ++it)
+    for (size_t i = 0; i < meshes_vector.size(); ++i)
     {
-        for (const auto& t : m->branes)
+	//const Mesh* m = *it;
+        const Mesh* m = meshes_vector[i];
+	for (const auto& t : m->branes)
         {
             // Write out the normal vector for this face (all zeros)
             float norm[3] = {0, 0, 0};
+           // #pragma omp critical
             file.write(reinterpret_cast<char*>(&norm), sizeof(norm));
 
             // Iterate over vertices (which are indices into the verts list)
@@ -181,11 +190,13 @@ bool Mesh::saveSTL(const std::string& filename,
             {
                 auto v = m->verts[t[i]];
                 float vert[3] = {v.x(), v.y(), v.z()};
+	//	#pragma omp critical
                 file.write(reinterpret_cast<char*>(&vert), sizeof(vert));
             }
 
             // Write out this face's attribute short
             uint16_t attrib = 0;
+	  //  #pragma omp critical
             file.write(reinterpret_cast<char*>(&attrib), sizeof(attrib));
         }
     }
